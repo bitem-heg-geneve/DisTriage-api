@@ -1,0 +1,15 @@
+publication_dir: /home/paul/DisTriage-api/model/data/raw/publication
+
+sibils:
+  url: "https://biodiversitypmc.sibils.org/api" # URL of the SIBILS API
+  batch_size: 20  # Number of PMIDs to fetch per batch
+  limit_per_host: 10  # Max number of simultaneous connections to the host
+  semaphore_size: 5  # Max number of concurrent asynchronous tasks
+  timeout: 30  # Timeout in seconds for API requests
+  retries: 3  # Number of retries on failure
+  log_level: INFO  # Optional: Log level specific to SIBILS operations
+
+overwrite: false  # Whether to overwrite existing data
+
+output:
+  log: /home/paul/DisTriage-api/model/data/raw/publication/fetch.log

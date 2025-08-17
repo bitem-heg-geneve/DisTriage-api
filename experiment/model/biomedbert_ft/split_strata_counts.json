@@ -1,0 +1,26 @@
+{
+  "train": {
+    "pos_MEDLINE": 2040,
+    "far_neg_MEDLINE": 1647,
+    "pos_PMC": 1006,
+    "far_neg_PMC": 526,
+    "neg_MEDLINE": 198,
+    "neg_PMC": 180
+  },
+  "val": {
+    "pos_MEDLINE": 356,
+    "far_neg_MEDLINE": 309,
+    "pos_PMC": 169,
+    "far_neg_PMC": 87,
+    "neg_MEDLINE": 37,
+    "neg_PMC": 30
+  },
+  "test": {
+    "pos_MEDLINE": 435,
+    "far_neg_MEDLINE": 341,
+    "pos_PMC": 227,
+    "far_neg_PMC": 90,
+    "neg_MEDLINE": 41,
+    "neg_PMC": 29
+  }
+}

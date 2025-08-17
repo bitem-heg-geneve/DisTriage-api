@@ -1,0 +1,3 @@
+-r requirements.base.txt
+transformers==4.55.2
+# torch CPU build only — installed via Dockerfile so we can use the CPU index
