@@ -1,0 +1,166 @@
+{
+  "config": {
+    "model": "microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext",
+    "max_len": 512,
+    "lr": 2e-05,
+    "epochs": 10,
+    "batch_train": 200,
+    "batch_eval": 200,
+    "accum_steps": 1,
+    "early_stop": true,
+    "es_patience": 3,
+    "es_threshold": 0.0,
+    "use_weighted_neg": true,
+    "w_neg": 10.0,
+    "w_far": 1.0,
+    "w_pos": 1.0,
+    "use_pmc_preference": true,
+    "pretrim_enable": true,
+    "pretrim_max_chars": 6000,
+    "random_state": 42,
+    "warmup_ratio": 0.06,
+    "weight_decay": 0.01,
+    "fp16": true,
+    "metric_for_best_model": "WSS95",
+    "test_size": 0.15,
+    "val_size": 0.15
+  },
+  "dataset": {
+    "rows": 7748,
+    "unique_pmids": 7748,
+    "pos_count": 4233,
+    "neg_plus_far_count": 3515,
+    "source_counts": {
+      "MEDLINE": 5404,
+      "PMC": 2344
+    },
+    "strata_counts": {
+      "pos_MEDLINE": 2831,
+      "far_neg_MEDLINE": 2297,
+      "pos_PMC": 1402,
+      "far_neg_PMC": 703,
+      "neg_MEDLINE": 276,
+      "neg_PMC": 239
+    }
+  },
+  "splits": {
+    "train": {
+      "size": 5597,
+      "pos": 3046,
+      "neg_plus_far": 2551,
+      "source_counts": {
+        "MEDLINE": 3885,
+        "PMC": 1712
+      },
+      "strata_counts": {
+        "pos_MEDLINE": 2040,
+        "far_neg_MEDLINE": 1647,
+        "pos_PMC": 1006,
+        "far_neg_PMC": 526,
+        "neg_MEDLINE": 198,
+        "neg_PMC": 180
+      }
+    },
+    "val": {
+      "size": 988,
+      "pos": 525,
+      "neg_plus_far": 463,
+      "source_counts": {
+        "MEDLINE": 702,
+        "PMC": 286
+      },
+      "strata_counts": {
+        "pos_MEDLINE": 356,
+        "far_neg_MEDLINE": 309,
+        "pos_PMC": 169,
+        "far_neg_PMC": 87,
+        "neg_MEDLINE": 37,
+        "neg_PMC": 30
+      }
+    },
+    "test": {
+      "size": 1163,
+      "pos": 662,
+      "neg_plus_far": 501,
+      "source_counts": {
+        "MEDLINE": 817,
+        "PMC": 346
+      },
+      "strata_counts": {
+        "pos_MEDLINE": 435,
+        "far_neg_MEDLINE": 341,
+        "pos_PMC": 227,
+        "far_neg_PMC": 90,
+        "neg_MEDLINE": 41,
+        "neg_PMC": 29
+      }
+    }
+  },
+  "metrics": {
+    "val_best_metric": 0.49493927125506076,
+    "val_context": {
+      "overall": {
+        "AP": 0.9984259407711392,
+        "F1": 0.9773584905660377,
+        "P@200": 1.0,
+        "nDCG@full": 0.9997933198935973,
+        "WSS@95": 0.49493927125506076,
+        "pos_count": 525,
+        "neg_count": 463,
+        "WSS@95_max": 0.49493927125506076
+      },
+      "neg_context": {
+        "AP": 0.9994771719188307,
+        "F1": 0.9857278782112274,
+        "P@200": 1.0,
+        "nDCG@full": 0.999933225174087,
+        "WSS@95": 0.15709459459459463,
+        "pos_count": 525,
+        "neg_count": 67,
+        "WSS@95_max": 0.15709459459459463
+      },
+      "far_neg_context": {
+        "AP": 0.9988815356340063,
+        "F1": 0.9847908745247148,
+        "P@200": 1.0,
+        "nDCG@full": 0.9998542310452259,
+        "WSS@95": 0.4581976112920738,
+        "pos_count": 525,
+        "neg_count": 396,
+        "WSS@95_max": 0.4581976112920738
+      }
+    },
+    "test_context": {
+      "overall": {
+        "AP": 0.9972839087405548,
+        "F1": 0.974739970282318,
+        "P@200": 1.0,
+        "nDCG@full": 0.9996481153990474,
+        "WSS@95": 0.45485812553740324,
+        "pos_count": 662,
+        "neg_count": 501,
+        "WSS@95_max": 0.45915735167669824
+      },
+      "neg_context": {
+        "AP": 0.9997210982718174,
+        "F1": 0.9916855631141346,
+        "P@200": 1.0,
+        "nDCG@full": 0.9999653987669718,
+        "WSS@95": 0.1407103825136612,
+        "pos_count": 662,
+        "neg_count": 70,
+        "WSS@95_max": 0.1407103825136612
+      },
+      "far_neg_context": {
+        "AP": 0.9975392886465332,
+        "F1": 0.9783743475018642,
+        "P@200": 1.0,
+        "nDCG@full": 0.9996807744078495,
+        "WSS@95": 0.4199451052150046,
+        "pos_count": 662,
+        "neg_count": 431,
+        "WSS@95_max": 0.42451967063129004
+      }
+    }
+  }
+}

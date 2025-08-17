@@ -9,8 +9,8 @@ from .routers.job import router as job_router
 log = logging.getLogger("uvicorn")
 
 app = FastAPI(
-    title=f"{settings.APP_NAME} (CellTriage-compatible)",
-    description="Create literature triage jobs and fetch ranked article scores. Compatible with CellTriage shapes.",
+    title=f"{settings.APP_NAME}",
+    description="Create DisProt literature triage jobs and fetch ranked article scores.",
     version="0.1.0",
 )
 
@@ -31,7 +31,6 @@ async def on_startup():
 async def on_shutdown():
     await close_db()
 
-# Public, CellTriage-style API
 app.include_router(job_router, prefix=settings.API_PREFIX, tags=["Job"])
 
 @app.get("/healthz", summary="Healthz", tags=["default"])

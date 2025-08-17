@@ -42,6 +42,7 @@ services:
       MONGO_DB: distriage
       APP_NAME: DisTriage API
       HF_MODEL_NAME: /models/biomedbert_ft/checkpoint-112
+      TOKENIZER_PATH: microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext
       HF_DEVICE: "-1"   # set "0" if you want GPU in the worker
       MAX_TOKENS: "512" # explicit token cap for tokenizer/truncation
     volumes:

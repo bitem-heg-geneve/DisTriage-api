@@ -164,7 +164,6 @@ async def get_job(job_id: str):
         article_set=items
     )
 
-# NEW: status endpoint akin to CellTriage, but scoped to /job/{job_id}
 class JobStatusResponse(BaseModel):
     job_id: str
     status: str
