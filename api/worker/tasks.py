@@ -59,7 +59,15 @@ async def _init_runtime():
     await _prefetch_model()
 
 
-@shared_task(name="app.worker.tasks.handle_ingress_message", bind=True)
+@shared_task(
+    name="app.worker.tasks.handle_ingress_message",
+    bind=True,
+    autoretry_for=(asyncio.TimeoutError, aiohttp.ClientError, OSError),
+    retry_backoff=30,
+    retry_backoff_max=300,
+    retry_jitter=True,
+    max_retries=5,
+)
 def handle_ingress_message(self, payload: dict):
     return _run_in_loop(_handle_ingress_message_async(payload))
 
@@ -167,7 +175,15 @@ async def _ingress_batch(job_id: str, pmids: List[int]):
             infer_batch_task.delay(job_id, list(infer_batch))
 
 
-@shared_task(name="app.worker.tasks.infer_batch_task", bind=True)
+@shared_task(
+    name="app.worker.tasks.infer_batch_task",
+    bind=True,
+    autoretry_for=(OSError,),
+    retry_backoff=10,
+    retry_backoff_max=60,
+    retry_jitter=True,
+    max_retries=3,
+)
 def infer_batch_task(self, job_id: str, pmids: List[int]):
     return _run_in_loop(_infer_batch_async(job_id, pmids))
 
