@@ -43,8 +43,8 @@ services:
       APP_NAME: DisTriage API
       HF_MODEL_NAME: /models/biomedbert_ft/checkpoint-112
       TOKENIZER_PATH: microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext
-      HF_DEVICE: "-1"   # set "0" if you want GPU in the worker
-      MAX_TOKENS: "512" # explicit token cap for tokenizer/truncation
+      HF_DEVICE: "-1"
+      MAX_TOKENS: "512"
       # Performance tuning (16-core machine, 4 workers)
       OMP_NUM_THREADS: "4"
       MKL_NUM_THREADS: "4"
@@ -88,7 +88,7 @@ services:
     restart: unless-stopped
     environment:
       APP_NAME: DisTriage API
-      API_PREFIX: /api/v1
+      API_PREFIX: /api/v1.0
       CORS_ORIGINS: http://localhost:3000,http://localhost:8000
       MONGO_URI: mongodb://mongo:27017/distriage
       MONGO_DB: distriage
@@ -96,12 +96,8 @@ services:
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       HF_MODEL_NAME: /models/biomedbert_ft/checkpoint-112
-      HF_DEVICE: "-1"   # set "0" if you want GPU in the API
-      MAX_TOKENS: "512" # keep API-side pipelines consistent if used
-      # Performance tuning (16-core machine, 4 workers)
-      OMP_NUM_THREADS: "4"
-      MKL_NUM_THREADS: "4"
-      TOKENIZERS_PARALLELISM: "false"
+      HF_DEVICE: "-1"
+      MAX_TOKENS: "512"
     volumes:
       - ../experiment/model/biomedbert_ft/checkpoint-112:/models/biomedbert_ft/checkpoint-112:ro
     depends_on:
