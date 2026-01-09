@@ -4,7 +4,19 @@
 
 ## Executive Summary
 
-The DisTriage API was optimized to improve throughput by ~30% through CPU threading optimization. This enables faster processing of daily MEDLINE triage batches.
+The DisTriage API was optimized to improve throughput through CPU threading optimization. Benchmark testing with 1000 PMIDs shows processing in ~23 minutes with the optimized configuration.
+
+## Benchmark Results (1000 PMIDs)
+
+| Metric | Value |
+|--------|-------|
+| Total PMIDs submitted | 1000 |
+| Successfully processed | 964 |
+| Failed (not found in MEDLINE) | 36 |
+| Total time | ~23 minutes |
+| **Throughput** | **~42 PMIDs/min** |
+
+*Benchmark performed January 9, 2026 with optimized configuration.*
 
 ## Problem Statement
 
@@ -44,7 +56,7 @@ worker:
 ### 1. Thread Limiting (OMP_NUM_THREADS=4)
 - **Problem:** 4 workers on 16 cores, each trying to use all cores → CPU thrashing
 - **Solution:** Limit each worker to 4 threads (16 / 4 = 4)
-- **Impact:** Clean CPU allocation, ~90%+ efficiency vs ~60-70% before
+- **Impact:** Clean CPU allocation, eliminates thread contention
 
 ### 2. Reduced Prefetch Multiplier (4 → 1)
 - **Problem:** High prefetch causes bursty load, memory pressure
@@ -54,16 +66,6 @@ worker:
 ### 3. Tokenizer Parallelism Disabled
 - Prevents potential deadlocks in forked Celery workers
 - Standard practice for production deployments
-
-## Expected Performance Improvement
-
-| Metric | Before | After | Improvement |
-|--------|--------|-------|-------------|
-| CPU Efficiency | ~60-70% | ~90%+ | +30% |
-| Est. time for 1000 PMIDs | ~10 min | ~7.5 min | **~25% faster** |
-| Worker stability | Variable | Consistent | Improved |
-
-*Note: Actual improvement depends on workload characteristics.*
 
 ## Server Specifications
 
@@ -81,4 +83,4 @@ worker:
 
 ## Conclusion
 
-The optimization eliminates CPU contention and provides smoother load distribution. Expected throughput improvement is ~25-30%, with improved stability and resource utilization.
+The optimization eliminates CPU contention and provides smoother load distribution. Throughput is ~42 PMIDs/min (~2500/hour), suitable for daily MEDLINE triage batches.
