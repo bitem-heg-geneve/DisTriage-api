@@ -80,15 +80,6 @@ worker:
 | INGRESS_BATCH_SIZE | 64 | PMIDs per SIBiLS fetch batch |
 | INFER_BATCH_SIZE | 32 | Documents per inference batch |
 
-## Comparison with Other Triage APIs
-
-| System | CPU Cores | Workers | Threads/Worker | Model |
-|--------|-----------|---------|----------------|-------|
-| DisTriage | 16 | 4 | 4 | BiomedBERT (single) |
-| BioMoQA | 52 | 4 | 12 | RoBERTa (5-fold ensemble) |
-| IPBES | 52 | 4 | 12 | RoBERTa (5-fold ensemble) |
-| CellTriage | 16 | 1 (GPU) | 4 | Custom (GPU inference) |
-
 ## Conclusion
 
-The optimization aligns DisTriage with the proven configurations used in BioMoQA and IPBES. Expected throughput improvement is ~25-30%, with improved stability and resource utilization.
+The optimization eliminates CPU contention and provides smoother load distribution. Expected throughput improvement is ~25-30%, with improved stability and resource utilization.
