@@ -45,6 +45,10 @@ services:
       TOKENIZER_PATH: microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext
       HF_DEVICE: "-1"   # set "0" if you want GPU in the worker
       MAX_TOKENS: "512" # explicit token cap for tokenizer/truncation
+      # Performance tuning (16-core machine, 4 workers)
+      OMP_NUM_THREADS: "4"
+      MKL_NUM_THREADS: "4"
+      TOKENIZERS_PARALLELISM: "false"
     volumes:
       - ../experiment/model/biomedbert_ft/checkpoint-112:/models/biomedbert_ft/checkpoint-112:ro
     depends_on:
@@ -59,7 +63,7 @@ services:
         "--queues=ingress,infer",
         "--hostname=worker@%h",
         "--concurrency=4",
-        "--prefetch-multiplier=4"
+        "--prefetch-multiplier=1"
       ]
 
   flower:
@@ -94,6 +98,10 @@ services:
       HF_MODEL_NAME: /models/biomedbert_ft/checkpoint-112
       HF_DEVICE: "-1"   # set "0" if you want GPU in the API
       MAX_TOKENS: "512" # keep API-side pipelines consistent if used
+      # Performance tuning (16-core machine, 4 workers)
+      OMP_NUM_THREADS: "4"
+      MKL_NUM_THREADS: "4"
+      TOKENIZERS_PARALLELISM: "false"
     volumes:
       - ../experiment/model/biomedbert_ft/checkpoint-112:/models/biomedbert_ft/checkpoint-112:ro
     depends_on:
