@@ -15,6 +15,8 @@ services:
     cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, FOWNER]
     security_opt:
       - no-new-privileges:true
+    networks:
+      - dbnet
 
   redis:
     image: redis:7
@@ -30,6 +32,8 @@ services:
     cap_add: [SETUID, SETGID]
     security_opt:
       - no-new-privileges:true
+    networks:
+      - dbnet
 
   worker:
     build:
@@ -45,28 +49,18 @@ services:
       MONGO_URI: mongodb://mongo:27017/distriage
       MONGO_DB: distriage
       APP_NAME: DisTriage API
-      HF_MODEL_NAME: /models/biomedbert_ft/checkpoint-112
-      TOKENIZER_PATH: microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext
-      HF_DEVICE: "-1"
-      MAX_TOKENS: "512"
-      OMP_NUM_THREADS: "4"
-      MKL_NUM_THREADS: "4"
-      TOKENIZERS_PARALLELISM: "false"
-    volumes:
-      - ../experiment/model/biomedbert_ft/checkpoint-112:/models/biomedbert_ft/checkpoint-112:ro
     depends_on:
       redis:
         condition: service_healthy
       mongo:
         condition: service_healthy
-    command:
-      ["celery", "-A", "app.worker.celery_app:app", "worker",
-       "--loglevel=INFO", "--queues=ingress,infer",
-       "--hostname=worker@%h", "--concurrency=4", "--prefetch-multiplier=1"]
     cap_drop: [ALL]
     cap_add: [SETUID, SETGID, CHOWN, DAC_OVERRIDE]
     security_opt:
       - no-new-privileges:true
+    networks:
+      - appnet
+      - dbnet
 
   flower:
     image: mher/flower:2.0.1
@@ -83,6 +77,9 @@ services:
     cap_drop: [ALL]
     security_opt:
       - no-new-privileges:true
+    networks:
+      - appnet
+      - dbnet
 
   api:
     build:
@@ -94,17 +91,11 @@ services:
     environment:
       APP_NAME: DisTriage API
       API_PREFIX: /api/v1.0
-      CORS_ORIGINS: http://localhost:3000,http://localhost:8000
       MONGO_URI: mongodb://mongo:27017/distriage
       MONGO_DB: distriage
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
-      HF_MODEL_NAME: /models/biomedbert_ft/checkpoint-112
-      HF_DEVICE: "-1"
-      MAX_TOKENS: "512"
-    volumes:
-      - ../experiment/model/biomedbert_ft/checkpoint-112:/models/biomedbert_ft/checkpoint-112:ro
     depends_on:
       redis:
         condition: service_healthy
@@ -112,12 +103,19 @@ services:
         condition: service_healthy
     ports:
       - "127.0.0.1:8000:8000"
-    command: >
-      sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000"
     cap_drop: [ALL]
     cap_add: [SETUID, SETGID, CHOWN, DAC_OVERRIDE]
     security_opt:
       - no-new-privileges:true
+    networks:
+      - frontend
+      - appnet
+      - dbnet
 
 volumes:
   mongo_data:
+
+networks:
+  frontend:
+  appnet:
+  dbnet:

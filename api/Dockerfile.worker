@@ -2,7 +2,8 @@ FROM python:3.12-slim
 WORKDIR /app
 ENV PIP_NO_CACHE_DIR=1 PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 
-# 1) Install CPU-only PyTorch explicitly from the CPU index (tiny compared to CUDA)
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
 RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.8.0
 
 COPY requirements.base.txt requirements.worker.txt ./
@@ -11,5 +12,7 @@ RUN pip install --no-cache-dir -r requirements.worker.txt
 COPY ./app ./app
 COPY ./worker ./app/worker
 
+RUN chown -R appuser:appuser /app
 ENV HF_HOME=/app/.cache/huggingface
+USER appuser
 CMD ["celery", "-A", "app.worker.celery_app", "worker", "-Q", "infer,ingress", "--concurrency=4"]
