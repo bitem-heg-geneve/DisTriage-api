@@ -5,27 +5,30 @@ services:
     restart: unless-stopped
     volumes:
       - mongo_data:/data/db
-    ports:
-      - "27017:27017"
     healthcheck:
       test: ["CMD-SHELL", "mongosh --quiet --eval 'db.adminCommand({ ping: 1 })' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 15s
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, FOWNER]
+    security_opt:
+      - no-new-privileges:true
 
   redis:
     image: redis:7
     container_name: api-redis-1
     restart: unless-stopped
-    ports:
-      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 10
       start_period: 5s
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
 
   worker:
     build:
@@ -45,7 +48,6 @@ services:
       TOKENIZER_PATH: microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext
       HF_DEVICE: "-1"
       MAX_TOKENS: "512"
-      # Performance tuning (16-core machine, 4 workers)
       OMP_NUM_THREADS: "4"
       MKL_NUM_THREADS: "4"
       TOKENIZERS_PARALLELISM: "false"
@@ -57,14 +59,13 @@ services:
       mongo:
         condition: service_healthy
     command:
-      [
-        "celery", "-A", "app.worker.celery_app:app", "worker",
-        "--loglevel=INFO",
-        "--queues=ingress,infer",
-        "--hostname=worker@%h",
-        "--concurrency=4",
-        "--prefetch-multiplier=1"
-      ]
+      ["celery", "-A", "app.worker.celery_app:app", "worker",
+       "--loglevel=INFO", "--queues=ingress,infer",
+       "--hostname=worker@%h", "--concurrency=4", "--prefetch-multiplier=1"]
+    cap_drop: [ALL]
+    cap_add: [SETUID, SETGID, CHOWN, DAC_OVERRIDE]
+    security_opt:
+      - no-new-privileges:true
 
   flower:
     image: mher/flower:2.0.1
@@ -74,10 +75,13 @@ services:
       FLOWER_PORT: "5555"
       CELERY_BROKER_URL: redis://redis:6379/0
     ports:
-      - "5556:5555"
+      - "127.0.0.1:5556:5555"
     depends_on:
       redis:
         condition: service_healthy
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
 
   api:
     build:
@@ -106,9 +110,13 @@ services:
       mongo:
         condition: service_healthy
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     command: >
       sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    cap_drop: [ALL]
+    cap_add: [SETUID, SETGID, CHOWN, DAC_OVERRIDE]
+    security_opt:
+      - no-new-privileges:true
 
 volumes:
   mongo_data:
