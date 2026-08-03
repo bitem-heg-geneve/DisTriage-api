@@ -27,6 +27,7 @@ services:
       retries: 10
       start_period: 5s
     cap_drop: [ALL]
+    cap_add: [SETUID, SETGID]
     security_opt:
       - no-new-privileges:true
 
