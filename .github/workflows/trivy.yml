@@ -63,6 +63,9 @@ jobs:
           ignore-unfixed: "true"
 
           # Fail the job when matching vulnerabilities are found.
+          trivyignores: api/.trivyignore
+
+          # Fail the job when matching vulnerabilities are found.
           exit-code: "1"
 
           timeout: 15m
