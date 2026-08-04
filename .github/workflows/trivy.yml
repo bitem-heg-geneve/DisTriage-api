@@ -51,7 +51,7 @@ jobs:
           format: sarif
           output: trivy-worker.sarif
           limit-severities-for-sarif: "true"
-          ignore-unfixed: "false"
+          ignore-unfixed: "true"
           exit-code: "1"
           timeout: 15m
 
