@@ -2,52 +2,74 @@ name: Trivy Security Scan
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+
   pull_request:
-    branches: [main]
+    branches:
+      - main
+
   schedule:
-    - cron: '0 6 * * 1'
+    # Every Monday at 06:00 UTC
+    - cron: "0 6 * * 1"
+
+# Cancel an older run when a newer commit is pushed to the same branch or PR.
+concurrency:
+  group: trivy-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Minimum permissions required to read the repository and upload SARIF.
+permissions:
+  contents: read
+  security-events: write
+
+env:
+  IMAGE_REF: worker-ci:${{ github.sha }}
 
 jobs:
   trivy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    name: Scan Worker image
+    runs-on: ubuntu-24.04
 
-      - name: Build API image
-        run: docker build -t api-api:ci -f api/Dockerfile.api api/
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Build Worker image
-        run: docker build -t api-worker:ci -f api/Dockerfile.worker api/
+        run: |
+          docker build \
+            --tag "${IMAGE_REF}" \
+            --file compose/local/pytorch/Dockerfile \
+            .
 
-      - name: Scan API image
-        uses: aquasecurity/trivy-action@master
+      - name: Scan Worker image with Trivy
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: api-api:ci
-          format: sarif
-          output: trivy-api.sarif
-          severity: CRITICAL,HIGH
-          exit-code: '0'
+          image-ref: ${{ env.IMAGE_REF }}
 
-      - name: Scan Worker image
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: api-worker:ci
+          # Scan operating-system and application-library vulnerabilities.
+          scanners: vuln
+          vuln-type: os,library
+
+          # Include HIGH and CRITICAL vulnerabilities in the SARIF report.
+          severity: HIGH,CRITICAL
           format: sarif
           output: trivy-worker.sarif
-          severity: CRITICAL,HIGH
-          exit-code: '0'
+          limit-severities-for-sarif: "true"
 
-      - name: Upload API scan results
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        with:
-          sarif_file: trivy-api.sarif
-          category: trivy-api
+          # Include vulnerabilities even when no fix is currently available.
+          ignore-unfixed: "false"
 
-      - name: Upload Worker scan results
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
+          # Fail the job when matching vulnerabilities are found.
+          exit-code: "1"
+
+          timeout: 15m
+
+      - name: Upload Trivy results to GitHub Security
+        if: always() && hashFiles('trivy-worker.sarif') != ''
+        uses: github/codeql-action/upload-sarif@f205ea1c3313d32999d8d6a48b4f6530d4437b38 # v4.37.4
         with:
           sarif_file: trivy-worker.sarif
           category: trivy-worker
