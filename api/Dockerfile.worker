@@ -4,6 +4,8 @@ ENV PIP_NO_CACHE_DIR=1 PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 
 RUN groupadd -r appuser && useradd -r -g appuser appuser
 
+RUN pip install --no-cache-dir --upgrade pip setuptools
+
 RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.13.0+cpu
 
 COPY requirements.base.txt requirements.worker.txt ./
