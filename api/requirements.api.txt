@@ -1,2 +1,2 @@
 -r requirements.base.txt
-watchfiles>=0.21
+watchfiles>=1.2.0
