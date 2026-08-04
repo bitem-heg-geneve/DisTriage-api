@@ -10,15 +10,12 @@ on:
       - main
 
   schedule:
-    # Every Monday at 06:00 UTC
     - cron: "0 6 * * 1"
 
-# Cancel an older run when a newer commit is pushed to the same branch or PR.
 concurrency:
   group: trivy-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# Minimum permissions required to read the repository and upload SARIF.
 permissions:
   contents: read
   security-events: write
@@ -41,30 +38,21 @@ jobs:
         run: |
           docker build \
             --tag "${IMAGE_REF}" \
-            --file compose/local/pytorch/Dockerfile \
-            .
+            --file api/Dockerfile.worker \
+            api/
 
       - name: Scan Worker image with Trivy
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ env.IMAGE_REF }}
-
-          # Scan operating-system and application-library vulnerabilities.
           scanners: vuln
           vuln-type: os,library
-
-          # Include HIGH and CRITICAL vulnerabilities in the SARIF report.
           severity: HIGH,CRITICAL
           format: sarif
           output: trivy-worker.sarif
           limit-severities-for-sarif: "true"
-
-          # Include vulnerabilities even when no fix is currently available.
           ignore-unfixed: "false"
-
-          # Fail the job when matching vulnerabilities are found.
           exit-code: "1"
-
           timeout: 15m
 
       - name: Upload Trivy results to GitHub Security
