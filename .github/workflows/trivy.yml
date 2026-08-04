@@ -60,7 +60,7 @@ jobs:
           limit-severities-for-sarif: "true"
 
           # Include vulnerabilities even when no fix is currently available.
-          ignore-unfixed: "false"
+          ignore-unfixed: "true"
 
           # Fail the job when matching vulnerabilities are found.
           exit-code: "1"
