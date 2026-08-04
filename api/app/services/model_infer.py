@@ -21,8 +21,7 @@ def get_pipe():
 
 def _pick_pos_score(all_scores: list[dict]) -> float:
     """
-    Given Hugging Face return_all_scores output (list of {label, score}),
-    return the POSITIVE-class probability.
+    Given a list of {label, score} dicts, return the POSITIVE-class probability.
     Tries common label names, then falls back to a best guess.
     """
     for key in ("POS", "Positive", "positive", "LABEL_1", "1"):
@@ -46,9 +45,10 @@ def predict_batch(texts: list[str]) -> list[dict]:
       - all:   full list of {label, score} for debugging/inspection
     """
     pipe = get_pipe()
+    # top_k=None replaces the deprecated return_all_scores=True (removed in transformers 5.x)
     outputs = pipe(
         texts,
-        return_all_scores=True,
+        top_k=None,
         function_to_apply="softmax",
         truncation=True,
         max_length=settings.MAX_TOKENS,
