@@ -1,17 +1,15 @@
 FROM python:3.14-slim
 WORKDIR /app
-ENV PIP_NO_CACHE_DIR=1 PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 UV_NO_CACHE=1 UV_FROZEN=1
 
 RUN groupadd -r appuser && useradd -r -g appuser appuser
 
 RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir --upgrade pip setuptools
+COPY --from=ghcr.io/astral-sh/uv:0.12.5 /uv /usr/local/bin/uv
 
-RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.13.0+cpu
-
-COPY requirements.base.txt requirements.worker.txt ./
-RUN pip install --no-cache-dir -r requirements.worker.txt
+COPY pyproject.toml uv.lock ./
+RUN uv sync --group worker --no-install-project
 
 COPY ./app ./app
 COPY ./worker ./app/worker
@@ -19,4 +17,4 @@ COPY ./worker ./app/worker
 RUN chown -R appuser:appuser /app
 ENV HF_HOME=/app/.cache/huggingface
 USER appuser
-CMD ["celery", "-A", "app.worker.celery_app", "worker", "-Q", "infer,ingress", "--concurrency=4"]
+CMD ["uv", "run", "celery", "-A", "app.worker.celery_app", "worker", "-Q", "infer,ingress", "--concurrency=4"]

@@ -1,14 +1,17 @@
 FROM python:3.14-slim
-
 WORKDIR /app
-ENV PIP_NO_CACHE_DIR=1 PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 UV_NO_CACHE=1 UV_FROZEN=1
 
 RUN groupadd -r appuser && useradd -r -g appuser appuser
 
-COPY requirements.base.txt requirements.api.txt ./
-RUN pip install --no-cache-dir -r requirements.api.txt
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+
+COPY --from=ghcr.io/astral-sh/uv:0.12.5 /uv /usr/local/bin/uv
+
+COPY pyproject.toml uv.lock ./
+RUN uv sync --group api --no-install-project
 
 COPY ./app ./app
 RUN chown -R appuser:appuser /app
 USER appuser
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
