@@ -37,3 +37,10 @@ explicit = true
 
 [tool.uv.sources]
 torch = { index = "pytorch-cpu" }
+
+[dependency-groups]
+dev = [
+    'pytest>=8.4.0',
+    'pytest-asyncio>=1.0.0',
+    'httpx>=0.28.1',
+]
