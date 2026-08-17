@@ -19,6 +19,11 @@ dependencies = [
 ]
 
 [dependency-groups]
+dev = [
+    "pytest>=8.4.0",
+    "pytest-asyncio>=1.0.0",
+    "httpx>=0.28.1",
+]
 api = [
     "watchfiles>=1.2.0",
 ]
@@ -37,10 +42,3 @@ explicit = true
 
 [tool.uv.sources]
 torch = { index = "pytorch-cpu" }
-
-[dependency-groups]
-dev = [
-    'pytest>=8.4.0',
-    'pytest-asyncio>=1.0.0',
-    'httpx>=0.28.1',
-]
