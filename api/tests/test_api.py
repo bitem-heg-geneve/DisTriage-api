@@ -11,7 +11,7 @@ def test_healthz():
 
 def test_create_job_returns_job_id():
     r = httpx.post(
-        f"{BASE}/api/v1.0/job",
+        f"{BASE}/api/v1/job",
         json={"article_set": [{"pmid": 31636882}], "use_fulltext": False},
     )
     assert r.status_code == 200
@@ -19,10 +19,10 @@ def test_create_job_returns_job_id():
 
 
 def test_create_job_empty_set():
-    r = httpx.post(f"{BASE}/api/v1.0/job", json={"article_set": [], "use_fulltext": False})
+    r = httpx.post(f"{BASE}/api/v1/job", json={"article_set": [], "use_fulltext": False})
     assert r.status_code in (200, 400, 422)
 
 
 def test_get_job_not_found():
-    r = httpx.get(f"{BASE}/api/v1.0/job/00000000-0000-0000-0000-000000000000")
+    r = httpx.get(f"{BASE}/api/v1/job/00000000-0000-0000-0000-000000000000")
     assert r.status_code == 404
