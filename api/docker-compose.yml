@@ -90,7 +90,7 @@ services:
     restart: unless-stopped
     environment:
       APP_NAME: DisTriage API
-      API_PREFIX: /api/v1.0
+      API_PREFIX: /api/v1
       MONGO_URI: mongodb://mongo:27017/distriage
       MONGO_DB: distriage
       REDIS_URL: redis://redis:6379/0
