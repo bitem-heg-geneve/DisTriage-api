@@ -28,7 +28,7 @@ api = [
     "watchfiles>=1.2.0",
 ]
 worker = [
-    "transformers==5.15.0",
+    "transformers==5.15.1",
     "torch==2.13.0+cpu",
 ]
 
