@@ -21,7 +21,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest>=8.4.0",
-    "pytest-asyncio>=1.0.0",
+    "pytest-asyncio>=1.4.0",
     "httpx>=0.28.1",
 ]
 api = [
