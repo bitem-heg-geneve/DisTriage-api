@@ -29,7 +29,7 @@ api = [
 ]
 worker = [
     "transformers==5.15.0",
-    "torch==2.13.0+cpu",
+    "torch==2.14.0",
 ]
 
 [tool.uv]
