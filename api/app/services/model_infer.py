@@ -6,6 +6,8 @@ _CACHE = {"pipe": None}
 
 def get_pipe():
     if _CACHE["pipe"] is None:
+        if not settings.HF_MODEL_NAME:
+            raise RuntimeError("HF_MODEL_NAME is not set; refusing to score with an arbitrary model")
         tokenizer = AutoTokenizer.from_pretrained(
             settings.HF_MODEL_NAME,
             model_max_length=settings.MAX_TOKENS,
@@ -22,21 +24,16 @@ def get_pipe():
 def _pick_pos_score(all_scores: list[dict]) -> float:
     """
     Given a list of {label, score} dicts, return the POSITIVE-class probability.
-    Tries common label names, then falls back to a best guess.
+    With top_k=None (transformers 5.x) the list is sorted by score, NOT by label index,
+    so positional fallbacks are wrong: all_scores[1] is always the smaller probability,
+    which caps every score at 0.5. Match the label by name or fail loudly.
     """
-    for key in ("POS", "Positive", "positive", "LABEL_1", "1"):
+    for key in ("POS", "POSITIVE", "Positive", "positive", "LABEL_1", "1"):
         for s in all_scores:
             if s.get("label") == key:
                 return float(s.get("score", 0.0))
-
-    candidates = [s for s in all_scores if "1" in str(s.get("label", ""))]
-    if candidates:
-        return float(candidates[0].get("score", 0.0))
-
-    if len(all_scores) >= 2:
-        return float(all_scores[1].get("score", 0.0))
-
-    return float(all_scores[0].get("score", 0.0)) if all_scores else 0.0
+    labels = [s.get("label") for s in all_scores]
+    raise ValueError(f"cannot identify the positive label among {labels}")
 
 def predict_batch(texts: list[str]) -> list[dict]:
     """

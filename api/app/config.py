@@ -22,7 +22,9 @@ class Settings(BaseModel):
     SIBILS_BATCH: int = int(os.getenv("SIBILS_BATCH", "100"))
     SIBILS_TIMEOUT: int = int(os.getenv("SIBILS_TIMEOUT", "30"))
 
-    HF_MODEL_NAME: str = os.getenv("HF_MODEL_NAME", "distilbert-base-uncased-finetuned-sst-2-english")
+    # Required, no default on purpose: the old default (an SST-2 sentiment model) silently
+    # replaced the DisTriage classifier from 2026-08-03 to 2026-10-26.
+    HF_MODEL_NAME: str = os.getenv("HF_MODEL_NAME", "")
     HF_DEVICE: int = int(os.getenv("HF_DEVICE", "-1"))
 
     # Hard cap for tokenizer (tokens). Keeps pipeline from complaining about missing max length.

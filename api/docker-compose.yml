@@ -49,6 +49,14 @@ services:
       MONGO_URI: mongodb://mongo:27017/distriage
       MONGO_DB: distriage
       APP_NAME: DisTriage API
+      HF_MODEL_NAME: /models/biomedbert_ft/checkpoint-112
+      HF_DEVICE: "-1"
+      MAX_TOKENS: "512"
+      OMP_NUM_THREADS: "4"
+      MKL_NUM_THREADS: "4"
+      TOKENIZERS_PARALLELISM: "false"
+    volumes:
+      - ../experiment/model/biomedbert_ft/checkpoint-112:/models/biomedbert_ft/checkpoint-112:ro
     depends_on:
       redis:
         condition: service_healthy
