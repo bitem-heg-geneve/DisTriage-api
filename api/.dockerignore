@@ -1,0 +1,13 @@
+# Keep the build context to what the images need (pyproject, uv.lock, app/, worker/).
+.venv/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+tests/
+.env
+.env.*
+.trivyignore
+docker-compose*.yml
+README.md
+.DS_Store

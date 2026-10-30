@@ -1,7 +1,39 @@
+# DisTriage API stack.
+#
+# Two ways to run it:
+#   * development:  `docker compose up --build` from this directory. Every
+#     ${VAR:-default} below resolves to its development default; the model is
+#     read from ../experiment/model/biomedbert_ft/checkpoint-112.
+#   * production:   deployed by ansible-cfg `playbook_prod_distriage.yml` with
+#     bitem.docker_compose, which runs `docker compose --project-name distriage
+#     --env-file /etc/distriage/distriage.env -f docker-compose.yml …`. The env
+#     file sets the DISTRIAGE_* variables below; the model directory comes from
+#     bitem.artifacts (read-only, root-owned, verified by SHA-256).
+#
+# Rules kept on purpose (see the 2026-08/10 incident in the README):
+#   * HF_MODEL_NAME is set here, once, to a fixed path inside the container.
+#     config.py has no default for it and model_infer.py refuses to start
+#     without it, so dropping this block can no longer make the worker fall back
+#     to an arbitrary Hugging Face model.
+#   * The worker runs Hugging Face OFFLINE: a missing model fails at start
+#     instead of being downloaded.
+#   * No `container_name:` and no explicit `image:` names. Both are
+#     daemon-global; Compose derives them from the project name instead, so two
+#     stacks on one host cannot collide. Dev project name = this directory
+#     ("api"), production = "distriage".
+
+x-infer-env: &infer-env
+  # The model directory as mounted below. A fixed container path, not a Hub id.
+  HF_MODEL_NAME: /models/distriage
+  HF_DEVICE: "${HF_DEVICE:--1}"
+  HF_HUB_OFFLINE: "1"
+  TRANSFORMERS_OFFLINE: "1"
+  MAX_TOKENS: "512"
+  MAX_TEXT_CHARS: "${DISTRIAGE_MAX_TEXT_CHARS:-5000}"
+
 services:
   mongo:
     image: mongo:7
-    container_name: api-mongo-1
     restart: unless-stopped
     volumes:
       - mongo_data:/data/db
@@ -20,7 +52,6 @@ services:
 
   redis:
     image: redis:7
-    container_name: api-redis-1
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -39,29 +70,48 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.worker
-    image: api-worker
-    container_name: api-worker-1
     restart: unless-stopped
     working_dir: /app
     environment:
+      <<: *infer-env
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       MONGO_URI: mongodb://mongo:27017/distriage
       MONGO_DB: distriage
       APP_NAME: DisTriage API
-      HF_MODEL_NAME: /models/biomedbert_ft/checkpoint-112
-      HF_DEVICE: "-1"
-      MAX_TOKENS: "512"
-      OMP_NUM_THREADS: "4"
-      MKL_NUM_THREADS: "4"
+      SIBILS_URL: "${DISTRIAGE_SIBILS_URL:-https://biodiversitypmc.sibils.org/api}"
+      OMP_NUM_THREADS: "${DISTRIAGE_INFER_THREADS:-4}"
+      MKL_NUM_THREADS: "${DISTRIAGE_INFER_THREADS:-4}"
       TOKENIZERS_PARALLELISM: "false"
+      # Informational: which model release this worker was deployed with.
+      # app.readiness prints it; the label below makes Compose recreate the
+      # container when the release changes or is repaired in place.
+      DISTRIAGE_MODEL_REVISION: "${DISTRIAGE_MODEL_REVISION:-dev}"
+    labels:
+      ch.bitem.model-revision: "${DISTRIAGE_MODEL_REVISION:-dev}"
+      ch.bitem.model-materialization: "${DISTRIAGE_MODEL_MATERIALIZATION:-dev}"
     volumes:
-      - ../experiment/model/biomedbert_ft/checkpoint-112:/models/biomedbert_ft/checkpoint-112:ro
+      # Production: the bitem.artifacts release path, e.g.
+      # /var/lib/bitem-artifacts/distriage-model/releases/sha256-<64 hex>/payload
+      - "${DISTRIAGE_MODEL_HOST_DIR:-../experiment/model/biomedbert_ft/checkpoint-112}:/models/distriage:ro"
     depends_on:
       redis:
         condition: service_healthy
       mongo:
         condition: service_healthy
+    healthcheck:
+      # Liveness of THIS Celery node (not a broadcast ping another worker could
+      # answer). Readiness of the model is app.readiness, run once per deploy.
+      test:
+        - CMD-SHELL
+        - >-
+          /app/.venv/bin/celery -A app.worker.celery_app inspect ping
+          --destination "celery@$${HOSTNAME}" --timeout 5 > /dev/null
+      interval: 30s
+      timeout: 10s
+      retries: 6
+      # Model load on CPU plus Celery start-up.
+      start_period: 180s
     cap_drop: [ALL]
     cap_add: [SETUID, SETGID, CHOWN, DAC_OVERRIDE]
     security_opt:
@@ -72,7 +122,6 @@ services:
 
   flower:
     image: mher/flower:2.0.1
-    container_name: api-flower-1
     restart: unless-stopped
     environment:
       FLOWER_PORT: "5555"
@@ -93,8 +142,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.api
-    image: api-api
-    container_name: api-api-1
     restart: unless-stopped
     environment:
       APP_NAME: DisTriage API
@@ -104,6 +151,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
+      CORS_ORIGINS: "${DISTRIAGE_CORS_ORIGINS:-*}"
     depends_on:
       redis:
         condition: service_healthy
@@ -111,6 +159,19 @@ services:
         condition: service_healthy
     ports:
       - "127.0.0.1:8000:8000"
+    healthcheck:
+      # The image has no curl; stdlib urllib is enough.
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request, sys;
+          sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=5).status == 200 else 1)
+      interval: 15s
+      timeout: 8s
+      retries: 8
+      start_period: 30s
     cap_drop: [ALL]
     cap_add: [SETUID, SETGID, CHOWN, DAC_OVERRIDE]
     security_opt:

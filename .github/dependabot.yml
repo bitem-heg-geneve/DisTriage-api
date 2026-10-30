@@ -1,11 +1,33 @@
 version: 2
 updates:
+  # One pull request per ecosystem and week instead of one per dependency.
+  # `groups` cannot span ecosystems; the newer `multi-ecosystem-groups` key
+  # could merge the three into a single PR once it is confirmed available on
+  # this organisation (see GitHub's "Configuring multi-ecosystem updates").
   - package-ecosystem: pip
     directory: /api
     schedule:
       interval: weekly
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 5
+    groups:
+      python-dependencies:
+        patterns:
+          - "*"
+
   - package-ecosystem: docker
     directory: /api
     schedule:
       interval: weekly
+    groups:
+      docker-images:
+        patterns:
+          - "*"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns:
+          - "*"
