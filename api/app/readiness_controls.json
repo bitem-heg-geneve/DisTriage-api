@@ -1,0 +1,10 @@
+{
+  "_comment": "Control texts for app.readiness and /readyz. positive: an intrinsically-disordered-protein abstract (Wright & Dyson 2015, Nat Rev Mol Cell Biol, PMID 25531225), also the PMID of the SIBiLS fetch check. negative: an unrelated clinical trial abstract. Replace both when porting to another triage service.",
+  "positive": {
+    "pmid": 25531225,
+    "text": "Intrinsically disordered proteins in cellular signalling and regulation. Intrinsically disordered proteins (IDPs) are important components of the cellular signalling machinery, allowing the same polypeptide to undertake different interactions with different consequences. IDPs are subject to combinatorial post-translational modifications and alternative splicing, adding complexity to regulatory networks and providing a mechanism for tissue-specific signalling. These proteins participate in the assembly of signalling complexes and in the dynamic self-assembly of membrane-less nuclear and cytoplasmic organelles. Experimental, computational and bioinformatic analyses combine to identify and characterize disordered regions of proteins, leading to a greater appreciation of their widespread roles in biological processes."
+  },
+  "negative": {
+    "text": "We conducted a randomized controlled trial of a 12-week supervised walking program in 240 adults with knee osteoarthritis. The primary outcome was the change in WOMAC pain score at week 12; secondary outcomes were quality of life and analgesic use."
+  }
+}

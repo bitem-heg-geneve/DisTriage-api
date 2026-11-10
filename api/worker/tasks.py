@@ -1,6 +1,14 @@
 # api/worker/tasks.py
+"""Ingress (SIBiLS fetch) and inference tasks.
+
+Shared triage guard (2026-11-10): a score is only ever produced from text the
+worker actually has. After the fetch every document carries a text_status
+(ok | missing | empty | fetch_error); only `ok` documents reach the model, and a
+document the model cannot score ends as infer_status=failed, error=no_prediction.
+Nothing on this path writes a score of 0.0 for "no text".
+"""
 import asyncio
-import aiohttp
+import math
 from typing import List
 
 from celery import shared_task
@@ -11,10 +19,11 @@ from beanie import init_beanie
 from app.config import settings
 from app.models.document import DocumentEntry
 from app.models.job import Job
-from app.services.sibils_client import fetch_medline, fetch_pmc
+from app.services.sibils_client import FetchResult, SibilsFetchError, client_session, fetch_medline, fetch_pmc
 from app.services.text_utils import normalize_whitespace
 from app.services.model_infer import predict_batch, get_pipe
 from app.services.batching import chunked
+from app.services.job_summary import NO_PREDICTION, TEXT_EMPTY, TEXT_FETCH_ERROR, TEXT_MISSING, TEXT_OK
 
 log = get_task_logger(__name__)
 
@@ -62,11 +71,11 @@ async def _init_runtime():
 @shared_task(
     name="app.worker.tasks.handle_ingress_message",
     bind=True,
-    autoretry_for=(asyncio.TimeoutError, aiohttp.ClientError, OSError),
+    autoretry_for=(OSError,),
     retry_backoff=30,
     retry_backoff_max=300,
     retry_jitter=True,
-    max_retries=5,
+    max_retries=3,
 )
 def handle_ingress_message(self, payload: dict):
     return _run_in_loop(_handle_ingress_message_async(payload))
@@ -88,55 +97,91 @@ async def _handle_ingress_message_async(payload: dict):
     return {"ok": True, "batches": len(batches), "count": len(pmids)}
 
 
-async def _ingress_batch(job_id: str, pmids: List[int]):
-    timeout = aiohttp.ClientTimeout(
-        total=None,
-        sock_connect=settings.SIBILS_TIMEOUT,
-        sock_read=settings.SIBILS_TIMEOUT,
-    )
-    connector = aiohttp.TCPConnector(limit_per_host=10)
+async def _entry(job_id: str, pmid: int) -> DocumentEntry | None:
+    return await DocumentEntry.find_one(DocumentEntry.job_id == job_id, DocumentEntry.pmid == int(pmid))
 
-    # NOTE: our current sibils_client joins with ",".join(ids),
-    # so we still pass strings to avoid type issues there.
+
+async def _mark_no_text(entry: DocumentEntry, text_status: str, detail: str | None = None) -> None:
+    entry.text_status = text_status
+    entry.ingress_status = "failed"
+    entry.error = text_status
+    entry.error_detail = detail
+    await entry.save()
+
+
+async def _record_fetch_meta(job_id: str, med: FetchResult) -> None:
+    """Log the SIBiLS instance once per job and keep its warnings on the job."""
+    job = await Job.find_one(Job.job_id == job_id)
+    if not job:
+        return
+    if job.sibils_version is None and med.sibils_version:
+        job.sibils_version = med.sibils_version
+        job.collection_version = med.collection_version
+        log.info(
+            "job %s: SIBiLS %s, collection %s, url %s, warning=%r",
+            job_id, med.sibils_version, med.collection_version, settings.SIBILS_URL, med.warning,
+        )
+    if med.warning:
+        log.warning("job %s: SIBiLS warning: %s", job_id, med.warning)
+        seen = job.sibils_warning or ""
+        if med.warning not in seen:
+            job.sibils_warning = (seen + "; " + med.warning if seen else med.warning)[:2000]
+    await job.save()
+
+
+async def _ingress_batch(job_id: str, pmids: List[int]):
+    # The SIBiLS client works with string ids.
     str_pmids = [str(p) for p in pmids]
 
-    async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
-        med = await fetch_medline(session, str_pmids)
+    async with client_session() as session:
+        try:
+            med = await fetch_medline(session, str_pmids)
+        except SibilsFetchError as exc:
+            log.error("job %s: MEDLINE fetch failed for %d PMIDs: %s", job_id, len(pmids), exc)
+            for pmid in pmids:
+                entry = await _entry(job_id, pmid)
+                if entry:
+                    await _mark_no_text(entry, TEXT_FETCH_ERROR, str(exc))
+            return
+        await _record_fetch_meta(job_id, med)
 
         pmc_ids: List[str] = []
         for pmid in pmids:
-            entry = await DocumentEntry.find_one(
-                DocumentEntry.job_id == job_id, DocumentEntry.pmid == int(pmid)
-            )
+            entry = await _entry(job_id, pmid)
             if not entry:
                 continue
 
-            # SIBiLS response keys may be strings; be robust either way
-            doc = (med.get(pmid) or med.get(str(pmid)) or {}).get("document", {})
-            if not doc:
-                entry.ingress_status = "failed"
-                entry.error = "MEDLINE not found"
-                await entry.save()
+            record = med.found.get(str(pmid))
+            if record is None:
+                await _mark_no_text(entry, TEXT_MISSING, "SIBiLS did not return this PMID")
                 continue
-
+            doc = record.get("document") or {}
             title = normalize_whitespace(doc.get("title", ""))
             abstract = normalize_whitespace(doc.get("abstract", ""))
-            pmcid = doc.get("pmcid")
+            if not title and not abstract:
+                await _mark_no_text(entry, TEXT_EMPTY, "SIBiLS record has neither title nor abstract")
+                continue
 
+            pmcid = doc.get("pmcid")
             entry.title = title
             entry.medline_abstract = abstract
             entry.pmcid = pmcid
+            entry.text_status = TEXT_OK
             if pmcid:
                 pmc_ids.append(pmcid)
             await entry.save()
 
-        pmc_map = await fetch_pmc(session, pmc_ids) if pmc_ids else {}
+        pmc_map: dict = {}
+        if pmc_ids:
+            try:
+                pmc_map = (await fetch_pmc(session, pmc_ids)).found
+            except SibilsFetchError as exc:
+                # Full text is a bonus; the abstract is enough to score.
+                log.warning("job %s: PMC fetch failed, scoring on abstracts: %s", job_id, exc)
 
         for pmid in pmids:
-            entry = await DocumentEntry.find_one(
-                DocumentEntry.job_id == job_id, DocumentEntry.pmid == int(pmid)
-            )
-            if not entry or entry.ingress_status == "failed":
+            entry = await _entry(job_id, pmid)
+            if not entry or entry.text_status != TEXT_OK:
                 continue
 
             if entry.pmcid and entry.pmcid in pmc_map:
@@ -153,21 +198,16 @@ async def _ingress_batch(job_id: str, pmids: List[int]):
                 entry.pmc_text = normalize_whitespace(" ".join(parts)) or None
 
             # Compose text for inference (title + fulltext/abstract), cap length
-            text = f"{entry.title or ''}. {(entry.pmc_text or entry.medline_abstract or '')}".strip()
-            max_chars = settings.MAX_TEXT_CHARS
-            if len(text) > max_chars:
-                text = text[:max_chars]
-            entry.text_for_infer = text
+            text = f"{entry.title or ''}. {(entry.pmc_text or entry.medline_abstract or '')}".strip(". ")
+            entry.text_for_infer = text[: settings.MAX_TEXT_CHARS]
             entry.ingress_status = "fetched"
             await entry.save()
 
-    # Fan out inference for successfully fetched docs
+    # Fan out inference for the documents that have text
     fetched_pmids: List[int] = []
     for pmid in pmids:
-        entry = await DocumentEntry.find_one(
-            DocumentEntry.job_id == job_id, DocumentEntry.pmid == int(pmid)
-        )
-        if entry and entry.ingress_status == "fetched":
+        entry = await _entry(job_id, pmid)
+        if entry and entry.ingress_status == "fetched" and entry.text_for_infer:
             fetched_pmids.append(int(pmid))
 
     if fetched_pmids:
@@ -188,35 +228,61 @@ def infer_batch_task(self, job_id: str, pmids: List[int]):
     return _run_in_loop(_infer_batch_async(job_id, pmids))
 
 
+def _valid_score(value) -> bool:
+    try:
+        f = float(value)
+    except (TypeError, ValueError):
+        return False
+    return math.isfinite(f) and 0.0 <= f <= 1.0
+
+
+async def _mark_no_prediction(doc: DocumentEntry, detail: str) -> None:
+    log.error("job %s pmid %s: no prediction: %s", doc.job_id, doc.pmid, detail)
+    doc.predictions = None
+    doc.infer_status = "failed"
+    doc.error = NO_PREDICTION
+    doc.error_detail = detail[:500]
+    await doc.save()
+
+
 async def _infer_batch_async(job_id: str, pmids: List[int]):
     await _init_runtime()
 
     docs: List[DocumentEntry] = []
     for pmid in pmids:
-        entry = await DocumentEntry.find_one(
-            DocumentEntry.job_id == job_id, DocumentEntry.pmid == int(pmid)
-        )
-        if entry and entry.ingress_status == "fetched":
+        entry = await _entry(job_id, pmid)
+        if entry and entry.ingress_status == "fetched" and entry.text_for_infer:
             docs.append(entry)
 
     if not docs:
         return {"ok": True, "count": 0}
 
-    texts = [d.text_for_infer or "" for d in docs]
+    texts = [d.text_for_infer for d in docs]
 
     try:
         preds = predict_batch(texts)
     except Exception as e:
+        log.exception("job %s: inference failed for %d documents", job_id, len(docs))
         for d in docs:
-            d.infer_status = "failed"
-            d.error = f"inference error: {e}"
-            await d.save()
-        return {"ok": False, "error": str(e)}
+            await _mark_no_prediction(d, f"inference error: {e}")
+        return {"ok": False, "error": NO_PREDICTION, "detail": str(e)}
 
+    if len(preds) != len(docs):
+        for d in docs:
+            await _mark_no_prediction(d, f"model returned {len(preds)} predictions for {len(docs)} texts")
+        return {"ok": False, "error": NO_PREDICTION}
+
+    scored = 0
     for d, pr in zip(docs, preds):
         # pr is a dict: {"score": <pos_prob>, "all": [ {label, score}, ... ]}
+        if not isinstance(pr, dict) or not _valid_score(pr.get("score")):
+            await _mark_no_prediction(d, f"model returned no usable score: {pr!r}"[:500])
+            continue
         d.predictions = pr
         d.infer_status = "done"
+        d.error = None
+        d.error_detail = None
         await d.save()
+        scored += 1
 
-    return {"ok": True, "count": len(docs)}
+    return {"ok": True, "count": scored, "no_prediction": len(docs) - scored}

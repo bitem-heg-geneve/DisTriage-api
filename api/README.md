@@ -25,19 +25,24 @@ A FastAPI + Celery + MongoDB + Redis pipeline for **DisTriage (DisProt literatur
 ```
 api/
 ├── app/
-│   ├── main.py              # FastAPI entrypoint
-│   ├── api/                 # Routers (job endpoints)
-│   ├── db/                  # MongoDB connection + models
-│   ├── services/            # Job logic, inference, batching
-│   └── readiness.py         # Post-deploy model check (python -m app.readiness)
+│   ├── main.py              # FastAPI entrypoint, /healthz, /readyz
+│   ├── config.py            # Settings from the environment (no silent defaults for model and SIBiLS)
+│   ├── db.py                # MongoDB connection (Beanie)
+│   ├── routers/job.py       # Job endpoints
+│   ├── models/              # Beanie documents: Job, DocumentEntry
+│   ├── services/
+│   │   ├── sibils_client.py # SIBiLS fetch with per-id outcome, retries, versions
+│   │   ├── job_summary.py   # n_* counts and done/partial/failed from the documents
+│   │   ├── model_infer.py   # Transformers pipeline, positive-class score
+│   │   └── batching.py, text_utils.py
+│   ├── readiness.py         # Model + SIBiLS gate before the worker starts (python -m app.readiness)
+│   └── readiness_controls.json  # Control texts for the gate and /readyz
 ├── worker/                  # Celery app + tasks (copied to app/worker in the image)
+├── tests/                   # Unit tests (job_summary, sibils parsing) and stack tests
 ├── Dockerfile.api
 ├── Dockerfile.worker
 ├── docker-compose.yml
-├── docker-compose.dev.yml
-├── requirements.api.txt
-├── requirements.worker.txt
-├── requirements.base.txt
+├── pyproject.toml, uv.lock
 └── README.md
 ```
 
@@ -59,7 +64,10 @@ Environment variables (set in `docker-compose.yml`; production values come from
 | `INGRESS_BATCH_SIZE`  | `64`                                             | PMIDs per ingress batch       |
 | `INFER_BATCH_SIZE`    | `32`                                             | Docs per inference batch      |
 | `MAX_TEXT_CHARS`      | `5000`                                           | Maximum characters per doc    |
-| `SIBILS_URL`          | `https://biodiversitypmc.sibils.org/api`         | SIBiLS fetch API              |
+| `SIBILS_URL`          | **none** (required)                              | SIBiLS API base URL, no trailing slash (the client appends `/fetch`). The process refuses to start without it; Compose sets it from `DISTRIAGE_SIBILS_URL` |
+| `SIBILS_RETRIES`      | `5`                                              | Attempts per SIBiLS fetch (backoff 2 s → 30 s, about one minute in all) before the batch is `fetch_error` |
+| `DISTRIAGE_READINESS_MIN` | `0.6`                                        | Minimum score of the positive control in `app.readiness` |
+| `DISTRIAGE_READINESS_FETCH` | `1`                                        | `0` skips the SIBiLS part of `app.readiness` (offline development only) |
 | `CORS_ORIGINS`        | `*`                                              | Comma-separated origins       |
 
 Compose-level knobs (`${VAR:-default}` in `docker-compose.yml`, all optional in development):
@@ -116,23 +124,54 @@ Response:
 ### Job Details
 **GET** `/api/v1/job/{job_id}`
 
+A score is only ever produced from text the worker actually fetched. An
+article without a score has `score: null` and an `error` saying why:
+`missing` (SIBiLS did not return the PMID), `empty` (record without title and
+abstract), `fetch_error` (SIBiLS unreachable after retries) or `no_prediction`
+(the model gave no usable score). Never `0.0` for "no text".
+
+Job `status`: `done` when every article is scored, `partial` when some are not
+(the scored ones are valid), `failed` when none is scored or when more than
+half of a job of 20 or more articles has no text (`error: "sibils_fetch"`,
+with the SIBiLS warning in `sibils_warning`).
+
 Response:
 ```json
 {
   "id": "uuid",
   "use_fulltext": true,
-  "status": "running",
-  "job_created_at": "2025-08-15T20:26:01.333Z",
-  "process_start_at": "2025-08-15T20:30:00.000Z",
-  "process_end_at": null,
-  "process_time": null,
+  "status": "partial",
+  "error": null,
+  "n_submitted": 3,
+  "n_scored": 2,
+  "n_no_text": 1,
+  "n_fetch_error": 0,
+  "n_no_prediction": 0,
+  "sibils_version": "v5.1.5.10",
+  "collection_version": "med_r1_v5.10",
+  "sibils_warning": "missing ids:999999999",
+  "job_created_at": "2026-11-10T20:26:01.333Z",
+  "process_start_at": "2026-11-10T20:26:01.333Z",
+  "process_end_at": "2026-11-10T20:27:12.000Z",
+  "process_time": 70.7,
   "article_set": [
     {
-      "pmid": 36585756,
-      "score": 0.91,
-      "pmcid": "PMC123456",
+      "pmid": 25531225,
+      "score": 0.97,
+      "error": null,
+      "text_status": "ok",
+      "pmcid": "PMC4405151",
       "text_source": "fulltext",
       "text": "Title + abstract/fulltext snippet..."
+    },
+    {
+      "pmid": 999999999,
+      "score": null,
+      "error": "missing",
+      "text_status": "missing",
+      "pmcid": null,
+      "text_source": "abstract",
+      "text": null
     }
   ]
 }
@@ -143,17 +182,25 @@ Response:
 ### Job Status
 **GET** `/api/v1/job/{job_id}/status`
 
+Same `status`, `error` and `n_*` counts as above, plus the progress counters.
+
 Response:
 ```json
 {
   "job_id": "uuid",
   "status": "running",
+  "error": null,
   "submitted_pmids": 200,
   "dedup_dropped": 3,
+  "n_submitted": 197,
+  "n_scored": 165,
+  "n_no_text": 7,
+  "n_fetch_error": 0,
+  "n_no_prediction": 5,
   "ingress_queued": 10,
   "ingress_done": 180,
   "ingress_failed": 7,
-  "infer_queued": 15,
+  "infer_queued": 10,
   "infer_done": 165,
   "infer_failed": 5
 }
@@ -189,15 +236,37 @@ start instead of being replaced by a download.
 
 ```bash
 docker compose exec worker /app/.venv/bin/python -m app.readiness
+curl -i http://127.0.0.1:8000/readyz
 ```
 
-Verifies that `HF_MODEL_NAME` is a local binary sequence classifier, runs one
-inference on a positive and a negative control text, and exits non-zero if the
-positive control scores below `DISTRIAGE_READINESS_MIN` (default 0.6) or does not
-outrank the negative one. The production playbook runs it after every deploy.
-From 3 Aug to 26 Oct 2026 the worker ran a generic sentiment model because the
-model variable and volume had been dropped from the Compose file; this check and
-the offline mode make that failure loud.
+`app.readiness` runs before the Celery worker starts (`Dockerfile.worker`) and
+as the post-deploy hook of the production playbook. It exits non-zero unless
+`HF_MODEL_NAME` is a local binary sequence classifier, the two control texts in
+`app/readiness_controls.json` score as expected (positive ≥
+`DISTRIAGE_READINESS_MIN`, default 0.6, and above the negative one), and
+`SIBILS_URL` returns a record for the positive control's PMID. It prints the
+SIBiLS instance and collection versions and stores the outcome in the
+`readiness` collection.
+
+`GET /readyz` on the API returns 200 with the live SIBiLS versions and the
+worker's last readiness outcome, or 503 with a `problems` list. `GET /healthz`
+stays a plain liveness check.
+
+Why: from 3 Aug to 26 Oct 2026 the worker ran a generic sentiment model because
+the model variable and volume had been dropped from the Compose file, and every
+score was capped at 0.5. The model check makes that loud; the fetch check does
+the same for a stale or unreachable text source.
+
+### Tests
+
+```bash
+uv run --group dev pytest tests/test_scoring_guard_units.py   # pure, no stack needed
+uv run --group dev pytest tests/                               # the rest needs the stack on :8000
+```
+
+`tests/test_scoring_guard.py` submits two PMIDs SIBiLS has and one it does
+not, and checks `score: null` + `error: "missing"` + `status: partial` with the
+counts.
 
 ## Deployment
 

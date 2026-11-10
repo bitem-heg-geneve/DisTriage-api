@@ -80,6 +80,10 @@ services:
       MONGO_DB: distriage
       APP_NAME: DisTriage API
       SIBILS_URL: "${DISTRIAGE_SIBILS_URL:-https://biodiversitypmc.sibils.org/api}"
+      # Readiness gate before the worker starts (app/readiness.py). Set
+      # DISTRIAGE_READINESS_FETCH=0 only for offline development.
+      DISTRIAGE_READINESS_MIN: "${DISTRIAGE_READINESS_MIN:-0.6}"
+      DISTRIAGE_READINESS_FETCH: "${DISTRIAGE_READINESS_FETCH:-1}"
       OMP_NUM_THREADS: "${DISTRIAGE_INFER_THREADS:-4}"
       MKL_NUM_THREADS: "${DISTRIAGE_INFER_THREADS:-4}"
       TOKENIZERS_PARALLELISM: "false"
@@ -152,6 +156,8 @@ services:
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       CORS_ORIGINS: "${DISTRIAGE_CORS_ORIGINS:-*}"
+      # /readyz fetches the control PMID from the same text source as the worker.
+      SIBILS_URL: "${DISTRIAGE_SIBILS_URL:-https://biodiversitypmc.sibils.org/api}"
     depends_on:
       redis:
         condition: service_healthy

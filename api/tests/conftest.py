@@ -1,3 +1,7 @@
+import os
+
+os.environ.setdefault("SIBILS_URL", "https://biodiversitypmc.sibils.org/api")
+
 import pytest
 from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient

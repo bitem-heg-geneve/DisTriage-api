@@ -16,3 +16,13 @@ async def init_db():
 async def close_db():
     if _client:
         _client.close()
+
+
+async def readiness_record() -> dict | None:
+    """The worker's last app.readiness outcome (document _id=worker), JSON-safe."""
+    if _client is None:
+        return None
+    doc = await _client.get_database(settings.MONGO_DB)["readiness"].find_one({"_id": "worker"})
+    if doc and doc.get("checked_at") is not None:
+        doc["checked_at"] = doc["checked_at"].isoformat()
+    return doc

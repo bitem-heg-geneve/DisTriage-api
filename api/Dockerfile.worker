@@ -17,4 +17,6 @@ COPY ./worker ./app/worker
 RUN chown -R appuser:appuser /app
 ENV HF_HOME=/app/.cache/huggingface
 USER appuser
-CMD ["uv", "run", "celery", "-A", "app.worker.celery_app", "worker", "-Q", "infer,ingress", "--concurrency=4"]
+# Readiness first (model + SIBiLS checks, see app/readiness.py): a worker that
+# would score with the wrong model or without a text source never starts.
+CMD ["sh", "-c", "/app/.venv/bin/python -m app.readiness && exec /app/.venv/bin/celery -A app.worker.celery_app worker -Q infer,ingress --concurrency=4"]

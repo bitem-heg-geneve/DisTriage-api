@@ -18,9 +18,13 @@ class Settings(BaseModel):
     INFER_BATCH_SIZE: int = int(os.getenv("INFER_BATCH_SIZE", "32"))
     INFER_MAX_WAIT_MS: int = int(os.getenv("INFER_MAX_WAIT_MS", "5000"))
 
-    SIBILS_URL: str = os.getenv("SIBILS_URL", "https://biodiversitypmc.sibils.org/api")
+    # Required, no default on purpose (shared triage guard, 2026-11-10): the text
+    # source is part of the deployment, like the model. Base URL without a
+    # trailing slash; the client appends /fetch.
+    SIBILS_URL: str = os.getenv("SIBILS_URL", "")
     SIBILS_BATCH: int = int(os.getenv("SIBILS_BATCH", "100"))
     SIBILS_TIMEOUT: int = int(os.getenv("SIBILS_TIMEOUT", "30"))
+    SIBILS_RETRIES: int = int(os.getenv("SIBILS_RETRIES", "5"))
 
     # Required, no default on purpose: the old default (an SST-2 sentiment model) silently
     # replaced the DisTriage classifier from 2026-08-03 to 2026-10-26.
@@ -35,4 +39,17 @@ class Settings(BaseModel):
 
     CORS_ORIGINS: str = os.getenv("CORS_ORIGINS", "*")
 
+
+def _require_sibils_url(v: str) -> None:
+    # Explicit check: pydantic does not validate defaults, and every field here
+    # is a default read from the environment.
+    if not v:
+        raise RuntimeError("SIBILS_URL is not set; refusing to start without a text source (no silent default)")
+    if not v.startswith(("http://", "https://")):
+        raise RuntimeError(f"SIBILS_URL={v!r} must start with http:// or https://")
+    if v.endswith("/"):
+        raise RuntimeError(f"SIBILS_URL={v!r} must not end with '/': the client appends /fetch")
+
+
 settings = Settings()
+_require_sibils_url(settings.SIBILS_URL)

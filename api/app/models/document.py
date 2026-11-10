@@ -16,11 +16,19 @@ class DocumentEntry(Document):
 
     text_for_infer: Optional[str] = None
 
+    # What the SIBiLS fetch gave us for this PMID (shared triage guard, §1):
+    # ok | missing | empty | fetch_error. None on documents from before the
+    # guard; see job_summary.legacy_text_status.
+    text_status: Optional[str] = None
+
     ingress_status: str = "pending"
     infer_status: str = "pending"
 
     predictions: Optional[Dict[str, Any]] = None
+    # Short machine-readable reason when there is no score: the text_status,
+    # or no_prediction. error_detail carries the human-readable cause.
     error: Optional[str] = None
+    error_detail: Optional[str] = None
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
