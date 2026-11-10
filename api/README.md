@@ -260,9 +260,12 @@ the same for a stale or unreachable text source.
 ### Tests
 
 ```bash
-uv run --group dev pytest tests/test_scoring_guard_units.py   # pure, no stack needed
-uv run --group dev pytest tests/                               # the rest needs the stack on :8000
+uv run --group dev pytest tests/                                          # unit tests only; stack tests skip
+DISTRIAGE_BASE=http://localhost:8000 uv run --group dev pytest tests/     # also the stack tests (they create jobs)
 ```
+
+The stack tests are opt-in through `DISTRIAGE_BASE` on purpose: with a
+forwarded port they would otherwise submit test jobs to production.
 
 `tests/test_scoring_guard.py` submits two PMIDs SIBiLS has and one it does
 not, and checks `score: null` + `error: "missing"` + `status: partial` with the

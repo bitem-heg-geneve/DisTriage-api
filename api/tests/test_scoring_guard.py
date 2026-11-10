@@ -9,15 +9,15 @@ import time
 import httpx
 import pytest
 
-BASE = os.environ.get("DISTRIAGE_BASE", "http://localhost:8000")
+# Opt-in only: this test submits a real job. No default base URL, because a
+# forwarded port 8000 (ssh LocalForward) would otherwise send it to production.
+BASE = os.environ.get("DISTRIAGE_BASE")
 KNOWN = [25531225, 31636882]   # Wright & Dyson 2015 (IDP review); Pyšek et al. 2019
 UNKNOWN = 999999999            # not a PubMed id
 TIMEOUT_S = 240
 
-try:
-    httpx.get(f"{BASE}/healthz", timeout=5).raise_for_status()
-except Exception as exc:  # noqa: BLE001
-    pytest.skip(f"no DisTriage API at {BASE}: {exc}", allow_module_level=True)
+if not BASE:
+    pytest.skip("set DISTRIAGE_BASE=http://host:port to run the stack test", allow_module_level=True)
 
 
 def wait_for_job(job_id: str) -> dict:

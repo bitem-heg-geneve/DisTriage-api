@@ -1,6 +1,13 @@
-import httpx
+import os
 
-BASE = "http://localhost:8000"
+import httpx
+import pytest
+
+# Opt-in only: these tests hit a running stack and create a job. No default
+# base URL, so a forwarded port 8000 never points them at production by accident.
+BASE = os.environ.get("DISTRIAGE_BASE")
+if not BASE:
+    pytest.skip("set DISTRIAGE_BASE=http://host:port to run the API tests", allow_module_level=True)
 
 
 def test_healthz():
