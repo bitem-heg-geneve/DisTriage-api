@@ -7,7 +7,7 @@ from pydantic import BaseModel, field_validator, ConfigDict
 
 from ..models.job import Job
 from ..models.document import DocumentEntry
-from ..services.job_summary import JobSummary, legacy_text_status, summarize
+from ..services.job_summary import JobSummary, legacy_text_status, summarize, with_degenerate_check
 from ..worker_client import enqueue_ingress_batches
 from ..config import settings
 
@@ -131,7 +131,11 @@ class _StatusRow(BaseModel):
 
 async def _refresh_job(job: Job, rows) -> JobSummary:
     """Recompute counts and status from the documents and persist them on the job."""
+    rows = list(rows)
     summary = summarize((r.text_status, r.ingress_status, r.infer_status) for r in rows)
+    # Shared guard: a finished job whose scores are all one value is a broken model, not a result.
+    summary = with_degenerate_check(summary, (float(r.predictions["score"]) for r in rows
+                   if r.infer_status == "done" and isinstance(r.predictions, dict) and r.predictions.get("score") is not None))
     if job.apply_summary(summary):
         await job.save()
     return summary

@@ -130,6 +130,10 @@ article without a score has `score: null` and an `error` saying why:
 abstract), `fetch_error` (SIBiLS unreachable after retries) or `no_prediction`
 (the model gave no usable score). Never `0.0` for "no text".
 
+A finished job whose scores are all one single value (all 0.0, all 0.5) over 20
+or more articles is `failed` with `error: "degenerate_scores"`: that is a wrong
+or degraded model, never a result.
+
 Job `status`: `done` when every article is scored, `partial` when some are not
 (the scored ones are valid), `failed` when none is scored or when more than
 half of a job of 20 or more articles has no text (`error: "sibils_fetch"`,

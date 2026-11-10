@@ -73,3 +73,18 @@ def test_running_and_queued():
 def test_legacy_documents_without_text_status():
     s = summarize(rows("legacy+done", "legacy+failed"))
     assert (s.status, s.n_scored, s.n_no_text) == ("partial", 1, 1)
+
+
+def test_degenerate_scores_fail_a_finished_job():
+    from app.services.job_summary import (DEGENERATE_MIN_SCORED, DEGENERATE_SCORES, JobSummary,
+                                          degenerate_scores, with_degenerate_check)
+    n = DEGENERATE_MIN_SCORED
+    done = JobSummary(n, n, 0, 0, 0, 0, 0, "done", None)
+    assert degenerate_scores([0.0] * n) and degenerate_scores([0.5] * n)
+    assert not degenerate_scores([0.0] * (n - 1))            # too few to judge
+    assert not degenerate_scores([0.0] * (n - 1) + [0.01])   # one different value is enough
+    out = with_degenerate_check(done, [0.0] * n)
+    assert out.status == "failed" and out.error == DEGENERATE_SCORES and out.n_scored == n
+    assert with_degenerate_check(done, [i / n for i in range(n)]) == done
+    running = JobSummary(n, 0, 0, 0, 0, 0, n, "running", None)
+    assert with_degenerate_check(running, [0.0] * n) == running
