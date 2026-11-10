@@ -88,3 +88,9 @@ def test_degenerate_scores_fail_a_finished_job():
     assert with_degenerate_check(done, [i / n for i in range(n)]) == done
     running = JobSummary(n, 0, 0, 0, 0, 0, n, "running", None)
     assert with_degenerate_check(running, [0.0] * n) == running
+
+
+def test_status_row_carries_predictions():
+    """/status recomputes the job summary from a projection; it must see the scores (2026-11-10 500)."""
+    from app.routers.job import _StatusRow
+    assert "predictions" in _StatusRow.model_fields

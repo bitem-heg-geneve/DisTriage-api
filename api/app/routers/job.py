@@ -127,6 +127,7 @@ class _StatusRow(BaseModel):
     text_status: Optional[str] = None
     ingress_status: str = "pending"
     infer_status: str = "pending"
+    predictions: Optional[dict] = None   # the status endpoint needs the scores for the degenerate check
 
 
 async def _refresh_job(job: Job, rows) -> JobSummary:
